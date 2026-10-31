@@ -196,6 +196,10 @@
           <button onclick="createRoom()" class="flex-1 py-3.5 bg-gradient-to-r from-amongRed to-rose-600 hover:from-rose-500 hover:to-rose-700 text-white font-orbitron font-black text-xs sm:text-sm rounded-xl shadow-xl hover:shadow-amongRed/40 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95">
             <span>👑</span> CREATE NEW ROOM
           </button>
+          <div class="flex flex-col items-center my-4">
+            <p class="text-sm text-gray-400 mb-2">SCAN TO JOIN</p>
+            <img id="qr-code-img" src="" alt="Room QR Code" class="w-44 h-44 rounded-lg border-2 border-cyan-400 shadow-lg bg-white p-2 hidden" />
+          </div>
 
           <div class="flex-1 flex gap-2">
             <input type="text" id="input-room-code" maxlength="4" placeholder="ROOM CODE" class="w-28 uppercase text-center bg-slate-950 border border-slate-700 rounded-xl font-orbitron font-black text-sm tracking-widest text-amongCyan focus:outline-none focus:border-amongCyan" />
@@ -854,20 +858,45 @@ function stopAmbientDrone() {
     /* ------------------------------------------------------------------
        7. ROOM CREATION & JOINING
        ------------------------------------------------------------------ */
-    function createRoom() {
-      playSFX('click');
-      const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-      localPlayer.isHost = true;
+  function createRoom() {
+  const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+  window.currentRoomCode = code;
+  
+  const playerId = 'host_' + Math.random().toString(36).substring(2, 7);
+  window.myPlayerId = playerId;
 
-      roomState = {
-        code: code,
-        status: 'lobby',
-        settings: { alienCount: 1, category: 'RANDOM' },
-        currentTopic: null,
-        players: { [localPlayer.id]: { ...localPlayer } },
-        ejectedPlayerId: null,
-        ghostMessages: []
-      };
+  const roomCodeDisplay = document.getElementById('display-room-code') || document.getElementById('roomCodeDisplay');
+  if (roomCodeDisplay) roomCodeDisplay.innerText = code;
+
+  // Generate QR code link
+  const joinUrl = `${window.location.origin}${window.location.pathname}?room=${code}`;
+  const qrImg = document.getElementById('qr-code-img');
+  if (qrImg) {
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(joinUrl)}`;
+    qrImg.classList.remove('hidden');
+  }
+
+  // Register room in Firebase
+  if (firebaseDb && window.FirebaseLib) {
+    const roomRef = window.FirebaseLib.ref(firebaseDb, 'rooms/' + code);
+    window.FirebaseLib.set(roomRef, {
+      createdAt: Date.now(),
+      status: 'lobby',
+      players: {
+        [playerId]: {
+          name: 'Host',
+          color: 'red',
+          hat: 'Crown',
+          isHost: true
+        }
+      }
+    });
+  }
+
+  if (typeof showScreen === 'function') {
+    showScreen('screen-lobby');
+  }
+}
 
       connectRoomRealtime(code);
       syncStateToNetwork();
@@ -1624,6 +1653,22 @@ function saveFirebaseConfig() {
       initNetworkEngine();
       renderCurrentScreen();
     };
+    window.addEventListener('DOMContentLoaded', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomFromUrl = urlParams.get('room');
+
+  if (roomFromUrl) {
+    const codeInput = document.getElementById('input-room-code') || document.getElementById('roomCode');
+    const nameInput = document.getElementById('input-nickname') || document.getElementById('nickname');
+
+    if (codeInput) {
+      codeInput.value = roomFromUrl.toUpperCase();
+    }
+    if (nameInput) {
+      setTimeout(() => nameInput.focus(), 300);
+    }
+  }
+});
   </script>
 </body>
 </html>
