@@ -604,6 +604,7 @@
     let localSyncChannel = null;
     let firebaseDb = null;
     let firebaseRoomRef = null;
+    let countdownInterval = null;
 
     /* ------------------------------------------------------------------
        3. AUDIO SYNTHESIZER (WEB AUDIO API)
@@ -641,7 +642,8 @@
       if (!audioCtx) return;
 
       ambientGain = audioCtx.createGain();
-      ambientGain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+      // Increased background music volume to 0.28 (loud & atmospheric)
+      ambientGain.gain.setValueAtTime(0.28, audioCtx.currentTime);
 
       osc1 = audioCtx.createOscillator();
       osc1.type = 'sine';
@@ -653,7 +655,7 @@
 
       const filter = audioCtx.createBiquadFilter();
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(300, audioCtx.currentTime);
+      filter.frequency.setValueAtTime(450, audioCtx.currentTime);
 
       osc1.connect(filter);
       osc2.connect(filter);
@@ -684,14 +686,14 @@
 
       if (type === 'click') {
         osc.frequency.setValueAtTime(400, now);
-        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.setValueAtTime(0.15, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
         osc.start(now); osc.stop(now + 0.05);
       } else if (type === 'alarm') {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(500, now);
         osc.frequency.linearRampToValueAtTime(900, now + 0.2);
-        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.setValueAtTime(0.25, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
         osc.start(now); osc.stop(now + 0.25);
       } else if (type === 'victory') {
@@ -699,7 +701,7 @@
         osc.frequency.setValueAtTime(523.25, now);
         osc.frequency.setValueAtTime(659.25, now + 0.1);
         osc.frequency.setValueAtTime(783.99, now + 0.2);
-        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.setValueAtTime(0.25, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
         osc.start(now); osc.stop(now + 0.4);
       }
@@ -707,31 +709,32 @@
 
 
     /* ------------------------------------------------------------------
-       4. AVATAR SVG GENERATOR
+       4. AVATAR SVG GENERATOR (Hats Positioned Higher above Character Head)
        ------------------------------------------------------------------ */
     function renderAvatarSVG(colorHex, hatId = 'none', sizeClass = "w-16 h-16") {
       let hatSvg = '';
       if (hatId === 'crown') {
-        hatSvg = `<path d="M 32,22 L 40,32 L 50,18 L 60,32 L 68,22 L 65,36 L 35,36 Z" fill="#eab308" stroke="#0f172a" stroke-width="2"/>`;
+        hatSvg = `<path d="M 32,16 L 40,26 L 50,12 L 60,26 L 68,16 L 65,30 L 35,30 Z" fill="#eab308" stroke="#0f172a" stroke-width="2"/>`;
       } else if (hatId === 'goggles') {
-        hatSvg = `<rect x="36" y="28" width="28" height="8" rx="3" fill="#06b6d4" stroke="#0f172a" stroke-width="2"/>`;
+        hatSvg = `<rect x="36" y="22" width="28" height="8" rx="3" fill="#06b6d4" stroke="#0f172a" stroke-width="2"/>`;
       } else if (hatId === 'pirate') {
-        hatSvg = `<path d="M 30,30 Q 50,10 70,30 L 65,34 L 35,34 Z" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>`;
+        hatSvg = `<path d="M 26,22 Q 50,2 74,22 L 67,26 L 33,26 Z" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>`;
       } else if (hatId === 'beanie') {
-        hatSvg = `<path d="M 35,32 Q 50,16 65,32 Z" fill="#a855f7" stroke="#0f172a" stroke-width="2"/>`;
+        hatSvg = `<path d="M 33,24 Q 50,8 67,24 Z" fill="#a855f7" stroke="#0f172a" stroke-width="2"/>`;
       } else if (hatId === 'detective') {
-        hatSvg = `<ellipse cx="50" cy="30" rx="20" ry="4" fill="#78350f"/><path d="M 36,30 L 40,18 L 60,18 L 64,30 Z" fill="#78350f"/>`;
+        hatSvg = `<ellipse cx="50" cy="22" rx="22" ry="4" fill="#78350f"/><path d="M 36,22 L 40,10 L 60,10 L 64,22 Z" fill="#78350f"/>`;
       } else if (hatId === 'tophat') {
-        hatSvg = `<ellipse cx="50" cy="32" rx="18" ry="4" fill="#0f172a"/><rect x="38" y="16" width="24" height="16" fill="#0f172a"/>`;
+        hatSvg = `<ellipse cx="50" cy="24" rx="18" ry="4" fill="#0f172a"/><rect x="38" y="8" width="24" height="16" fill="#0f172a"/>`;
       }
 
+      // Group wraps hat in transform Y translation to ensure all hats sit comfortably above the head
       return `
         <svg class="${sizeClass} drop-shadow-md inline-block" viewBox="0 0 100 100">
           <rect x="18" y="38" width="18" height="42" rx="8" fill="${colorHex}" stroke="#0f172a" stroke-width="4"/>
           <path d="M 35,25 C 35,12 65,12 65,25 L 65,75 C 65,85 58,88 52,88 L 52,78 L 48,78 L 48,88 C 42,88 35,85 35,75 Z" fill="${colorHex}" stroke="#0f172a" stroke-width="4"/>
           <ellipse cx="60" cy="35" rx="16" ry="10" fill="#06b6d4" stroke="#0f172a" stroke-width="3"/>
           <ellipse cx="58" cy="33" rx="10" ry="5" fill="#a5f3fc" opacity="0.8"/>
-          ${hatSvg}
+          <g transform="translate(0, -6)">${hatSvg}</g>
         </svg>
       `;
     }
@@ -881,7 +884,7 @@
       }
 
       showScreen('screen-lobby');
-      showToast(`Room ${code} created! Display view ready.`);
+      showToast(`Room ${code} created! Host display view ready.`);
     }
 
     function joinRoom() {
@@ -1003,6 +1006,9 @@
 
       roomState.status = 'role_reveal';
       syncStateToNetwork();
+
+      // Clear countdown interval if running
+      if (countdownInterval) clearInterval(countdownInterval);
 
       // Auto transition to writing phase
       setTimeout(() => {
@@ -1130,7 +1136,22 @@
         const isAlien = roomState.players[ejectedId].isAlien;
 
         if (isAlien) {
-          roomState.status = 'alien_last_chance';
+          if (ejectedId.startsWith('bot_')) {
+            // Bot alien auto-guesses after 2 seconds
+            roomState.status = 'alien_last_chance';
+            syncStateToNetwork();
+            setTimeout(() => {
+              if (localPlayer.isHost) {
+                const topic = roomState.currentTopic;
+                const choices = topic ? [topic.sub, ...topic.distractors] : [];
+                const botGuess = choices[Math.floor(Math.random() * choices.length)];
+                submitAlienLastGuess(botGuess);
+              }
+            }, 2500);
+            return;
+          } else {
+            roomState.status = 'alien_last_chance';
+          }
         } else {
           checkWinConditions();
         }
@@ -1255,19 +1276,33 @@
       const badge = document.getElementById('role-badge');
       const icon = document.getElementById('role-icon');
       const subtopicBox = document.getElementById('role-subtopic-box');
+      const subtopicText = document.getElementById('role-subtopic');
       const warning = document.getElementById('role-alien-warning');
 
       if (roomState.currentTopic) {
         document.getElementById('role-general-topic').innerText = roomState.currentTopic.general;
-        document.getElementById('role-subtopic').innerText = roomState.currentTopic.sub;
+        subtopicText.innerText = roomState.currentTopic.sub;
       }
 
+      // Live 5s countdown
+      let count = 5;
+      const countEl = document.getElementById('role-reveal-countdown');
+      if (countEl) countEl.innerText = count;
+      if (countdownInterval) clearInterval(countdownInterval);
+      countdownInterval = setInterval(() => {
+        count--;
+        if (countEl && count >= 0) countEl.innerText = count;
+        if (count <= 0) clearInterval(countdownInterval);
+      }, 1000);
+
+      // HOST DISPLAY: Secret Sub-Topic is HIDDEN for Host too!
       if (localPlayer.isHost) {
         icon.innerText = "📺";
         title.innerText = "ROLES ASSIGNED";
         title.className = "text-2xl sm:text-3xl font-black font-orbitron text-white mt-2";
         badge.innerText = "HOST DISPLAY";
         badge.className = "px-3 py-1 rounded-full text-[10px] font-orbitron font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40 uppercase tracking-widest";
+        subtopicText.innerText = "🔒 HIDDEN FROM HOST DISPLAY";
         subtopicBox.classList.remove('hidden');
         warning.classList.add('hidden');
         return;
@@ -1298,11 +1333,21 @@
     function renderWritingScreen() {
       const inputCard = document.getElementById('writing-input-card');
       const promptText = document.getElementById('writing-prompt-text');
+      const input = document.getElementById('input-player-sentence');
 
+      // Clear input textarea if user has not submitted yet in a new round
+      const localData = roomState.players[localPlayer.id];
+      if (input && (!localData || !localData.hasSubmitted)) {
+        if (localData && !localData.sentence) {
+          input.value = '';
+        }
+      }
+
+      // HOST DISPLAY: Secret Sub-Topic is HIDDEN for Host too!
       if (localPlayer.isHost) {
         if (inputCard) inputCard.classList.add('hidden');
         if (promptText && roomState.currentTopic) {
-          promptText.innerHTML = `Secret Sub-Topic: <span class="text-amongCyan font-bold">${roomState.currentTopic.sub}</span> (${roomState.currentTopic.general})`;
+          promptText.innerHTML = `General Topic: <span class="text-amber-400 font-bold">${roomState.currentTopic.general}</span> <span class="text-slate-400 text-xs font-mono ml-2">(🔒 Secret Sub-Topic Hidden)</span>`;
         }
       } else {
         if (inputCard) inputCard.classList.remove('hidden');
