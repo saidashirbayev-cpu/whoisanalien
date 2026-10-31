@@ -891,8 +891,10 @@
       }
     }
 
-    function connectRoomRealtime(code) {
+   function connectRoomRealtime(code) {
       roomState.code = code;
+      roomState.status = 'lobby'; // Fixed: Set status to 'lobby' so Firebase keeps host on the lobby screen!
+
       const lobbyCodeDisplay = document.getElementById('lobby-room-code');
       if (lobbyCodeDisplay) lobbyCodeDisplay.innerText = code;
 
@@ -914,6 +916,11 @@
           }
         });
       }
+
+      syncStateToNetwork();
+      showScreen('screen-lobby');
+      showToast(`Connected to Room ${code}!`);
+    }
 
       syncStateToNetwork();
       showScreen('screen-lobby');
