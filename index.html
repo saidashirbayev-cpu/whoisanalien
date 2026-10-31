@@ -804,7 +804,15 @@
       connectRoomRealtime(code);
       syncStateToNetwork();
     }
-
+function showScreen(id) {
+  document.querySelectorAll('section[id^="screen-"]').forEach(sec => {
+    sec.classList.add('hidden');
+  });
+  const target = document.getElementById(id);
+  if (target) {
+    target.classList.remove('hidden');
+  }
+}
     function joinRoom() {
       playSFX('click');
       const codeInput = document.getElementById('input-room-code').value.trim().toUpperCase();
