@@ -807,7 +807,7 @@
     }
 
 
-    /* ------------------------------------------------------------------
+   /* ------------------------------------------------------------------
        6. MULTIPLAYER NETWORK & REALTIME ENGINE
        ------------------------------------------------------------------ */
     function initNetworkEngine() {
@@ -829,14 +829,27 @@
       }
 
       if (firebaseDb && window.FirebaseLib) {
-        const roomRef = window.FirebaseLib.ref(firebaseDb, 'rooms/' + roomState.code);
-        window.FirebaseLib.set(roomRef, roomState);
+        if (localPlayer.isHost) {
+          // Host updates global room state & settings
+          const roomRef = window.FirebaseLib.ref(firebaseDb, 'rooms/' + roomState.code);
+          window.FirebaseLib.set(roomRef, roomState);
+        } else {
+          // Joined players write ONLY to their own player entry (prevents overwriting host/other players)
+          const playerRef = window.FirebaseLib.ref(firebaseDb, `rooms/${roomState.code}/players/${localPlayer.id}`);
+          window.FirebaseLib.set(playerRef, roomState.players[localPlayer.id] || localPlayer);
+        }
       }
     }
 
     function applyRemoteState(newState) {
       if (!newState) return;
       roomState = newState;
+
+      // Maintain host flag for local device
+      if (roomState.players && roomState.players[localPlayer.id]) {
+        localPlayer = { ...roomState.players[localPlayer.id], isHost: localPlayer.isHost };
+      }
+
       renderCurrentScreen();
     }
 
@@ -847,8 +860,16 @@
     function createRoom() {
       const code = Math.random().toString(36).substring(2, 6).toUpperCase();
       localPlayer.isHost = true;
+      roomState.code = code;
+      roomState.status = 'lobby';
+      roomState.players = {
+        [localPlayer.id]: { ...localPlayer }
+      };
 
-      // Render QR Code for Host Lobby
+      const lobbyCodeDisplay = document.getElementById('lobby-room-code');
+      if (lobbyCodeDisplay) lobbyCodeDisplay.innerText = code;
+
+      // Render QR Code for Host Screen
       const joinUrl = `${window.location.origin}${window.location.pathname}?room=${code}`;
       const qrImg = document.getElementById('qr-code-img');
       if (qrImg) {
@@ -856,7 +877,20 @@
         qrImg.classList.remove('hidden');
       }
 
-      connectRoomRealtime(code);
+      if (firebaseDb && window.FirebaseLib) {
+        firebaseRoomRef = window.FirebaseLib.ref(firebaseDb, 'rooms/' + code);
+        window.FirebaseLib.set(firebaseRoomRef, roomState);
+
+        window.FirebaseLib.onValue(firebaseRoomRef, (snapshot) => {
+          const val = snapshot.val();
+          if (val) {
+            applyRemoteState(val);
+          }
+        });
+      }
+
+      showScreen('screen-lobby');
+      showToast(`Room ${code} created! You are the Host.`);
     }
 
     function joinRoom() {
@@ -878,82 +912,35 @@
         const roomRef = window.FirebaseLib.ref(firebaseDb, 'rooms/' + code);
         window.FirebaseLib.get(roomRef).then((snapshot) => {
           if (snapshot.exists()) {
-            connectRoomRealtime(code);
+            roomState.code = code;
+            const lobbyCodeDisplay = document.getElementById('lobby-room-code');
+            if (lobbyCodeDisplay) lobbyCodeDisplay.innerText = code;
+
+            // Merge student into rooms/CODE/players/ID without overwriting room
+            const playerRef = window.FirebaseLib.ref(firebaseDb, `rooms/${code}/players/${localPlayer.id}`);
+            window.FirebaseLib.set(playerRef, localPlayer);
+
+            firebaseRoomRef = roomRef;
+            window.FirebaseLib.onValue(firebaseRoomRef, (snap) => {
+              const val = snap.val();
+              if (val) {
+                applyRemoteState(val);
+              }
+            });
+
+            showScreen('screen-lobby');
+            showToast(`Joined Room ${code}!`);
           } else {
-            alert(`Room "${code}" not found! Please check the room code.`);
+            alert(`Room "${code}" not found! Check the room code on host screen.`);
           }
         }).catch((err) => {
           console.error(err);
-          connectRoomRealtime(code);
+          alert('Error joining room: ' + err.message);
         });
       } else {
-        connectRoomRealtime(code);
+        showScreen('screen-lobby');
       }
     }
-
-   function connectRoomRealtime(code) {
-      roomState.code = code;
-      roomState.status = 'lobby'; // Fixed: Set status to 'lobby' so Firebase keeps host on the lobby screen!
-
-      const lobbyCodeDisplay = document.getElementById('lobby-room-code');
-      if (lobbyCodeDisplay) lobbyCodeDisplay.innerText = code;
-
-      if (!roomState.players) roomState.players = {};
-      roomState.players[localPlayer.id] = { ...localPlayer };
-
-      if (firebaseDb && window.FirebaseLib) {
-        firebaseRoomRef = window.FirebaseLib.ref(firebaseDb, 'rooms/' + code);
-
-        // Sync player data to Firebase room
-        const playerRef = window.FirebaseLib.ref(firebaseDb, `rooms/${code}/players/${localPlayer.id}`);
-        window.FirebaseLib.set(playerRef, localPlayer);
-
-        // Subscribe to real-time room changes
-        window.FirebaseLib.onValue(firebaseRoomRef, (snapshot) => {
-          const val = snapshot.val();
-          if (val) {
-            applyRemoteState(val);
-          }
-        });
-      }
-
-      syncStateToNetwork();
-      showScreen('screen-lobby');
-      showToast(`Connected to Room ${code}!`);
-    }
-
-
-    function addBotPlayer() {
-      playSFX('click');
-      const botId = 'bot_' + Math.random().toString(36).substring(2, 7);
-      const botColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)].hex;
-      const botHat = AVATAR_HATS[Math.floor(Math.random() * AVATAR_HATS.length)].id;
-      const botNames = ['Bot-Zeus', 'Bot-Nova', 'Bot-Astra', 'Bot-Orion', 'Bot-Titan'];
-      const name = botNames[Object.keys(roomState.players).length % botNames.length];
-
-      roomState.players[botId] = {
-        id: botId,
-        name: name,
-        color: botColor,
-        hat: botHat,
-        isHost: false,
-        sentence: '',
-        hasSubmitted: false,
-        votedFor: null,
-        isEjected: false
-      };
-
-      syncStateToNetwork();
-    }
-
-    function updateHostSettings() {
-      if (!localPlayer.isHost) return;
-      roomState.settings.alienCount = parseInt(document.getElementById('select-alien-count').value);
-      roomState.settings.category = document.getElementById('select-topic-cat').value;
-      syncStateToNetwork();
-    }
-
-
     /* ------------------------------------------------------------------
        8. GAME LAUNCH & ROLE ASSIGNMENT
        ------------------------------------------------------------------ */
