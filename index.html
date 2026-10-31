@@ -881,18 +881,56 @@ function showScreen(id) {
     target.classList.remove('hidden');
   }
 }
-    function joinRoom() {
-      playSFX('click');
-      const codeInput = document.getElementById('input-room-code').value.trim().toUpperCase();
-      if (!codeInput || codeInput.length < 4) {
-        showToast('Please enter a valid 4-character Room Code!');
-        return;
+  function joinRoom() {
+  // Get inputs
+  const codeInput = document.getElementById('input-room-code') || document.getElementById('roomCode');
+  const nameInput = document.getElementById('input-nickname') || document.getElementById('nickname');
+
+  const code = codeInput ? codeInput.value.trim().toUpperCase() : '';
+  const name = nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'Cadet';
+
+  if (!code) {
+    alert('Please enter a room code!');
+    return;
+  }
+
+  // Check if Firebase is ready
+  if (!firebaseDb || !window.FirebaseLib) {
+    alert('Database is still connecting. Please wait 2 seconds and tap Join again!');
+    return;
+  }
+
+  // Look up room in Firebase
+  const roomRef = window.FirebaseLib.ref(firebaseDb, 'rooms/' + code);
+  
+  window.FirebaseLib.get(roomRef).then((snapshot) => {
+    if (snapshot.exists()) {
+      // Create player ID
+      const playerId = 'player_' + Math.random().toString(36).substr(2, 7);
+      window.myPlayerId = playerId;
+      window.currentRoomCode = code;
+
+      // Add player to room
+      const playerRef = window.FirebaseLib.ref(firebaseDb, `rooms/${code}/players/${playerId}`);
+      window.FirebaseLib.set(playerRef, {
+        name: name,
+        color: window.selectedColor || 'red',
+        hat: window.selectedHat || 'None',
+        isHost: false
+      });
+
+      // Switch screen to lobby
+      if (typeof showScreen === 'function') {
+        showScreen('screen-lobby');
       }
-
-      localPlayer.isHost = false;
-      connectRoomRealtime(codeInput);
+    } else {
+      alert(`Room "${code}" not found! Please check the code created on the main screen.`);
     }
-
+  }).catch((err) => {
+    console.error(err);
+    alert('Connection error: ' + err.message);
+  });
+}
     function connectRoomRealtime(code) {
       roomState.code = code;
       document.getElementById('lobby-room-code').innerText = code;
