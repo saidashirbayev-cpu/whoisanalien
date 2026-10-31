@@ -1438,21 +1438,36 @@
     function closeConfigModal() {
       document.getElementById('modal-firebase-config').classList.add('hidden');
     }
+// Auto-connect Firebase directly on page load
+const myFirebaseConfig = {
+  apiKey: "AIzaSyAkigGahkmJLDHRdfbyZzP7_fdS3UGzz18",
+  authDomain: "who-is-an-alien.firebaseapp.com",
+  databaseURL: "https://who-is-an-alien-default-rtdb.firebaseio.com",
+  projectId: "who-is-an-alien",
+  storageBucket: "who-is-an-alien.firebasestorage.app",
+  messagingSenderId: "612684824624",
+  appId: "1:612684824624:web:9b86559f26776600442df5",
+  measurementId: "G-0RPZNPXWN3"
+};
 
-    function saveFirebaseConfig() {
-      const val = document.getElementById('input-firebase-json').value.trim();
-      if (val) {
-        try {
-          const cfg = JSON.parse(val);
-          const app = window.FirebaseLib.initializeApp(cfg);
-          firebaseDb = window.FirebaseLib.getDatabase(app);
-          showToast('Firebase Realtime DB connected!');
-          closeConfigModal();
-        } catch(e) {
-          showToast('Invalid Firebase JSON format!');
-        }
+// Initialize connection automatically
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    if (window.FirebaseLib) {
+      try {
+        const app = window.FirebaseLib.initializeApp(myFirebaseConfig);
+        firebaseDb = window.FirebaseLib.getDatabase(app);
+        console.log("Firebase connected successfully!");
+      } catch(e) {
+        console.error("Firebase connection error:", e);
       }
     }
+  }, 500);
+});
+
+function saveFirebaseConfig() {
+  closeConfigModal();
+}
 
 
     /* ------------------------------------------------------------------
