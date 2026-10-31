@@ -622,7 +622,75 @@
         audioCtx.resume();
       }
     }
+let audioCtx = null;
+let isMusicOn = false;
+let ambientGain = null;
+let osc1 = null;
+let osc2 = null;
 
+function toggleMusic() {
+  // Initialize or resume AudioContext
+  if (!audioCtx) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AudioContext();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+
+  const btn = document.getElementById('btn-music');
+
+  if (!isMusicOn) {
+    startAmbientDrone();
+    isMusicOn = true;
+    if (btn) btn.innerText = '🎵 MUSIC: ON';
+  } else {
+    stopAmbientDrone();
+    isMusicOn = false;
+    if (btn) btn.innerText = '🎵 MUSIC: OFF';
+  }
+}
+
+function startAmbientDrone() {
+  if (!audioCtx) return;
+
+  // Master ambient volume (subtle background drone)
+  ambientGain = audioCtx.createGain();
+  ambientGain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+
+  // Deep sine drone (55 Hz / Note A1)
+  osc1 = audioCtx.createOscillator();
+  osc1.type = 'sine';
+  osc1.frequency.setValueAtTime(55, audioCtx.currentTime);
+
+  // Shimmer oscillator detuned (110.5 Hz / Note A2)
+  osc2 = audioCtx.createOscillator();
+  osc2.type = 'triangle';
+  osc2.frequency.setValueAtTime(110.5, audioCtx.currentTime);
+
+  // Warm space lowpass filter
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(300, audioCtx.currentTime);
+
+  osc1.connect(filter);
+  osc2.connect(filter);
+  filter.connect(ambientGain);
+  ambientGain.connect(audioCtx.destination);
+
+  osc1.start();
+  osc2.start();
+}
+
+function stopAmbientDrone() {
+  if (ambientGain && audioCtx) {
+    ambientGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+    setTimeout(() => {
+      if (osc1) { osc1.stop(); osc1.disconnect(); }
+      if (osc2) { osc2.stop(); osc2.disconnect(); }
+    }, 200);
+  }
+}
     function toggleAudio() {
       initAudio();
       isMuted = !isMuted;
