@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-black">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Who is an Alien? Online - Kahoot & Among Us Edition</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+
+  <!-- Firebase JS SDK (v10) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, get, onValue, update, remove, push } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    window.FirebaseLib = { initializeApp, getDatabase, ref, set, get, onValue, update, remove, push };
+  </script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            orbitron: ['Orbitron', 'sans-serif'],
+          },
+          colors: {
+            amongRed: '#ff2a4b',
+            amongCyan: '#06b6d4',
+            amongGreen: '#22c55e',
+            amongYellow: '#eab308',
+            amongPurple: '#a855f7',
+            amongOrange: '#f97316',
+            amongPink: '#ec4899',
+            spaceDark: '#05070f',
+          },
+          animation: {
+            'float-slow': 'float 6s ease-in-out infinite',
+            'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
+            'gradient-move': 'gradientMove 5s ease infinite',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
+              '50%': { transform: 'translateY(-10px) rotate(3deg)' },
+            },
+            pulseGlow: {
+              '0%, 100%': { filter: 'drop-shadow(0 0 15px rgba(6,182,212,0.6))' },
+              '50%': { filter: 'drop-shadow(0 0 25px rgba(255,42,75,0.8))' },
+            },
+            gradientMove: {
+              '0%': { backgroundPosition: '0% 50%' },
+              '50%': { backgroundPosition: '100% 50%' },
+              '100%': { backgroundPosition: '0% 50%' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    html, body {
+      height: 100%;
+      overflow-x: hidden;
+      touch-action: manipulation;
+    }
+
+    .title-gradient {
+      background: linear-gradient(-45deg, #06b6d4, #a855f7, #ff2a4b, #eab308);
+      background-size: 300% 300%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: gradientMove 6s ease infinite;
+    }
+
+    #bg-star-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #06b6d4;
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans bg-spaceDark text-slate-100">
+
+  <!-- Background Space Canvas -->
+  <canvas id="bg-star-canvas"></canvas>
+
+  <!-- Global Header Bar -->
+  <header class="relative z-20 flex items-center justify-between p-3 sm:p-4 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md flex-shrink-0">
+    <div class="flex items-center gap-2 cursor-pointer" onclick="goHome()">
+      <span class="text-2xl animate-bounce">🛸</span>
+      <span class="font-orbitron font-black text-sm sm:text-lg tracking-wider">
+        WHO IS AN <span class="text-amongRed">ALIEN?</span> <span class="text-xs text-amongCyan font-normal font-mono">ONLINE</span>
+      </span>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <!-- Audio Synth Toggle -->
+      <button id="btn-audio-toggle" onclick="toggleAudio()" class="px-3 py-1.5 rounded-xl text-xs font-bold font-orbitron flex items-center gap-1.5 bg-slate-900 border border-slate-700 hover:border-amongCyan text-slate-200 transition-all shadow-md active:scale-95 cursor-pointer">
+        <span id="audio-icon">🎵</span>
+        <span id="audio-label" class="hidden sm:inline">MUSIC: OFF</span>
+      </button>
+
+      <!-- Firebase / Network Status Badge -->
+      <button onclick="openConfigModal()" class="px-2.5 py-1.5 rounded-xl text-[11px] font-mono flex items-center gap-1.5 bg-slate-900 border border-slate-800 hover:border-slate-600 text-slate-300 transition-all cursor-pointer">
+        <span id="net-status-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="net-status-text" class="hidden sm:inline">LOCAL / FIREBASE</span>
+        <span>⚙️</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Notification Toast Container -->
+  <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-full max-w-sm px-4 pointer-events-none"></div>
+
+  <!-- Main View Container -->
+  <main class="relative z-10 flex-1 flex flex-col justify-center max-w-5xl mx-auto w-full p-3 sm:p-6 my-auto">
+
+    <!-- ================= 1. HOME & KAHOOT LOBBY CUSTOMIZER ================= -->
+    <section id="screen-home" class="flex-1 flex flex-col justify-center my-auto space-y-6">
+      
+      <!-- Logo Header -->
+      <div class="text-center space-y-2">
+        <h1 class="text-3xl sm:text-5xl font-black font-orbitron tracking-wider title-gradient drop-shadow-xl">
+          WHO IS AN ALIEN?
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
+          Kahoot-style social deduction game! Blend in with your vocabulary sentence or unmask the imposters!
+        </p>
+      </div>
+
+      <!-- Avatar Customizer Card -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-6 backdrop-blur-xl shadow-2xl max-w-xl mx-auto w-full space-y-5">
+        
+        <div class="flex flex-col sm:flex-row items-center gap-6">
+          <!-- Live Avatar Preview -->
+          <div class="relative flex flex-col items-center justify-center bg-slate-950 p-4 rounded-2xl border border-slate-800 w-36 h-36 flex-shrink-0">
+            <div id="avatar-preview-container" class="animate-float-slow">
+              <!-- Rendered SVG Avatar -->
+            </div>
+            <span id="preview-nickname" class="mt-2 font-orbitron font-bold text-xs text-slate-300 truncate max-w-[120px]">Cadet</span>
+          </div>
+
+          <!-- Controls: Nickname, Color & Hat -->
+          <div class="flex-1 w-full space-y-3">
+            <div>
+              <label class="block text-[11px] font-orbitron font-bold text-slate-400 uppercase tracking-wider mb-1">Nickname</label>
+              <input type="text" id="input-nickname" maxlength="12" placeholder="Enter your name..." value="Cadet" oninput="updateAvatarPreview()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm font-bold text-white focus:outline-none focus:border-amongCyan transition-all" />
+            </div>
+
+            <!-- Color Palette Picker -->
+            <div>
+              <label class="block text-[11px] font-orbitron font-bold text-slate-400 uppercase tracking-wider mb-1">Spacesuit Color</label>
+              <div id="color-picker-grid" class="grid grid-cols-8 gap-1.5">
+                <!-- Color Buttons populated dynamically -->
+              </div>
+            </div>
+
+            <!-- Hat Picker -->
+            <div>
+              <label class="block text-[11px] font-orbitron font-bold text-slate-400 uppercase tracking-wider mb-1">Hat / Accessory</label>
+              <div id="hat-picker-grid" class="flex flex-wrap gap-1.5">
+                <!-- Hat Buttons populated dynamically -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Room Join / Create Actions -->
+        <div class="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row gap-3">
+          <button onclick="createRoom()" class="flex-1 py-3.5 bg-gradient-to-r from-amongRed to-rose-600 hover:from-rose-500 hover:to-rose-700 text-white font-orbitron font-black text-xs sm:text-sm rounded-xl shadow-xl hover:shadow-amongRed/40 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+            <span>👑</span> CREATE NEW ROOM
+          </button>
+
+          <div class="flex-1 flex gap-2">
+            <input type="text" id="input-room-code" maxlength="4" placeholder="ROOM CODE" class="w-28 uppercase text-center bg-slate-950 border border-slate-700 rounded-xl font-orbitron font-black text-sm tracking-widest text-amongCyan focus:outline-none focus:border-amongCyan" />
+            <button onclick="joinRoom()" class="flex-1 py-3.5 bg-gradient-to-r from-amongCyan to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-orbitron font-black text-xs sm:text-sm rounded-xl shadow-xl transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95">
+              <span>🚀</span> JOIN
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= 2. ROOM LOBBY SCREEN (KAHOOT STYLE) ================= -->
+    <section id="screen-lobby" class="hidden flex-1 flex flex-col justify-between my-auto space-y-4">
+      
+      <!-- Lobby Header & Room Info -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 backdrop-blur-xl shadow-xl">
+        <div class="flex items-center gap-3">
+          <div class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-center">
+            <span class="block text-[10px] font-orbitron text-slate-400 uppercase">ROOM CODE</span>
+            <span id="lobby-room-code" class="font-orbitron font-black text-2xl text-amongCyan tracking-widest">X7K2</span>
+          </div>
+          <div>
+            <h2 class="font-orbitron font-black text-lg text-white">SPACESHIP LOBBY</h2>
+            <p id="lobby-player-count" class="text-xs font-mono text-slate-400">Waiting for crewmates... (1/8)</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="copyRoomLink()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl font-orbitron font-bold text-xs transition-all flex items-center gap-1.5 cursor-pointer">
+            <span>🔗</span> COPY LINK
+          </button>
+          <button onclick="leaveRoom()" class="px-3 py-2 bg-red-950/60 hover:bg-red-900/80 border border-red-800/80 text-red-300 rounded-xl font-orbitron font-bold text-xs transition-all cursor-pointer">
+            LEAVE
+          </button>
+        </div>
+      </div>
+
+      <!-- Player Cards Grid (Kahoot / Among Us style) -->
+      <div id="lobby-players-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 my-auto py-2">
+        <!-- Player Cards populated dynamically -->
+      </div>
+
+      <!-- Host Controls Panel (Shown only to Host) -->
+      <div id="host-controls-panel" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 backdrop-blur-xl space-y-3">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div class="flex items-center gap-4 text-xs font-medium">
+            <div>
+              <label class="block text-[10px] font-orbitron text-slate-400 uppercase mb-1">Alien Count</label>
+              <select id="select-alien-count" onchange="updateHostSettings()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 font-bold text-white focus:outline-none">
+                <option value="1">1 Alien 👽</option>
+                <option value="2">2 Aliens 👽👽</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-orbitron text-slate-400 uppercase mb-1">Topic Category</label>
+              <select id="select-topic-cat" onchange="updateHostSettings()" class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 font-bold text-white focus:outline-none">
+                <option value="RANDOM">🎲 Random Topics</option>
+                <option value="ENVIRONMENT">🌍 Environment & Climate</option>
+                <option value="ECONOMY">📈 Global Economy</option>
+                <option value="TECH">🤖 Technology & AI</option>
+                <option value="EDUCATION">📚 Education & Careers</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <button onclick="addBotPlayer()" class="px-3.5 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl font-orbitron font-bold text-xs transition-all flex items-center gap-1 cursor-pointer">
+              <span>🤖</span> ADD BOT
+            </button>
+            <button onclick="launchGame()" class="flex-1 sm:flex-none px-8 py-3 bg-gradient-to-r from-amongRed to-rose-600 hover:from-rose-500 hover:to-rose-700 text-white font-orbitron font-black text-sm rounded-xl shadow-xl transition-all cursor-pointer active:scale-95">
+              🚀 LAUNCH GAME
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= 3. ROLE REVEAL SCREEN ================= -->
+    <section id="screen-role-reveal" class="hidden flex-1 flex flex-col items-center justify-center my-auto text-center space-y-6">
+      
+      <div id="role-card-container" class="bg-slate-900/95 border-2 border-slate-800 rounded-3xl p-6 sm:p-8 max-w-md w-full backdrop-blur-2xl shadow-2xl space-y-5 animate-pulse-glow">
+        <div id="role-icon" class="text-6xl animate-bounce">
+          🧑‍🚀
+        </div>
+
+        <div>
+          <span id="role-badge" class="px-3 py-1 rounded-full text-[10px] font-orbitron font-bold bg-amongCyan/20 text-amongCyan border border-amongCyan/40 uppercase tracking-widest">
+            ROLE ASSIGNED
+          </span>
+          <h2 id="role-title" class="text-2xl sm:text-3xl font-black font-orbitron text-white mt-2">
+            YOU ARE A CREWMATE
+          </h2>
+        </div>
+
+        <!-- Topic Details Box -->
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-left space-y-3 text-xs">
+          <div>
+            <span class="text-[10px] font-orbitron text-slate-400 uppercase block">General Topic</span>
+            <span id="role-general-topic" class="font-bold text-amber-400 text-sm">GLOBAL ECONOMY</span>
+          </div>
+          <div id="role-subtopic-box" class="pt-2 border-t border-slate-800">
+            <span class="text-[10px] font-orbitron text-slate-400 uppercase block">Sub-Topic (Secret)</span>
+            <span id="role-subtopic" class="font-bold text-amongCyan text-sm">Inflation & Interest Rates</span>
+          </div>
+          <div id="role-alien-warning" class="hidden pt-2 border-t border-red-900/60 text-amongRed text-[11px] font-semibold italic">
+            🚨 You do NOT know the exact sub-topic! Blend in by writing a sentence related to the General Topic!
+          </div>
+        </div>
+
+        <p class="text-xs text-slate-400 font-mono">
+          Game starting in <span id="role-reveal-countdown" class="text-amongCyan font-bold">5</span>s...
+        </p>
+      </div>
+    </section>
+
+
+    <!-- ================= 4. SENTENCE WRITING PHASE ================= -->
+    <section id="screen-writing" class="hidden flex-1 flex flex-col justify-between my-auto space-y-4">
+      
+      <!-- Phase Header -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3 backdrop-blur-md">
+        <div>
+          <span class="px-2.5 py-1 rounded-md text-[10px] font-orbitron font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">PHASE 1/3</span>
+          <h2 class="font-orbitron font-black text-sm sm:text-base text-white mt-1">WRITE YOUR SENTENCE</h2>
+        </div>
+
+        <div class="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800">
+          <span class="animate-pulse">⏳</span>
+          <span id="writing-timer" class="font-orbitron font-black text-sm text-amongCyan">01:30</span>
+        </div>
+      </div>
+
+      <!-- Prompt Info Box -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 backdrop-blur-md space-y-1">
+        <span class="text-[10px] font-orbitron text-slate-400 uppercase">Your Assignment</span>
+        <p id="writing-prompt-text" class="text-xs sm:text-sm font-semibold text-slate-200">
+          Write 1 sentence related to <span class="text-amongCyan font-bold">Inflation & Interest Rates</span>.
+        </p>
+      </div>
+
+      <!-- Sentence Input Card -->
+      <div id="writing-input-card" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6 backdrop-blur-xl space-y-4 shadow-xl">
+        <textarea id="input-player-sentence" rows="3" placeholder="Type your sentence here..." class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-xs sm:text-sm font-medium text-white focus:outline-none focus:border-amongCyan transition-all resize-none"></textarea>
+        
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-[11px] font-mono text-slate-400">Keep it clean and academic!</span>
+          <button id="btn-submit-sentence" onclick="submitSentence()" class="px-6 py-2.5 bg-gradient-to-r from-amongCyan to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-orbitron font-black text-xs sm:text-sm rounded-xl shadow-lg transition-all cursor-pointer active:scale-95">
+            SUBMIT SENTENCE 🚀
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Submission Status Grid -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-orbitron font-bold text-slate-300">SUBMISSION FEED</span>
+          <button id="btn-force-reveal" onclick="forceReveal()" class="hidden text-[10px] font-orbitron text-amber-400 underline cursor-pointer">HOST: FORCE REVEAL 👁️</button>
+        </div>
+        <div id="writing-submission-feed" class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ================= 5. REVEAL & READING PHASE ================= -->
+    <section id="screen-reading" class="hidden flex-1 flex flex-col justify-between my-auto space-y-4">
+      
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3 backdrop-blur-md">
+        <div>
+          <span class="px-2.5 py-1 rounded-md text-[10px] font-orbitron font-bold bg-amongCyan/20 text-amongCyan border border-amongCyan/40">READING TIME! 📖</span>
+          <h2 class="font-orbitron font-black text-sm sm:text-base text-white mt-1">ANALYZE ALL SENTENCES</h2>
+        </div>
+
+        <button id="btn-proceed-voting" onclick="proceedToVoting()" class="px-5 py-2 bg-gradient-to-r from-amongRed to-rose-600 text-white font-orbitron font-black text-xs rounded-xl shadow-lg transition-all cursor-pointer">
+          PROCEED TO VOTING 🚨
+        </button>
+      </div>
+
+      <!-- Sentences Cards Feed -->
+      <div id="reading-sentences-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 my-auto max-h-[60vh] overflow-y-auto p-1">
+        <!-- Populated dynamically -->
+      </div>
+    </section>
+
+
+    <!-- ================= 6. EMERGENCY MEETING & VOTING PHASE ================= -->
+    <section id="screen-voting" class="hidden flex-1 flex flex-col justify-between my-auto space-y-4">
+      
+      <!-- Alarm Banner Header -->
+      <div class="bg-red-950/80 border-2 border-amongRed rounded-2xl p-4 flex items-center justify-between gap-3 backdrop-blur-xl animate-pulse">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl animate-bounce">🚨</span>
+          <div>
+            <h2 class="font-orbitron font-black text-sm sm:text-lg text-white">EMERGENCY MEETING!</h2>
+            <p class="text-xs font-mono text-red-200">Discuss sentences & vote for suspected Aliens!</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-red-900">
+          <span>⏱️</span>
+          <span id="voting-timer" class="font-orbitron font-black text-sm text-amongRed">00:45</span>
+        </div>
+      </div>
+
+      <!-- Voting Options Grid -->
+      <div id="voting-players-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 my-auto p-1">
+        <!-- Populated dynamically -->
+      </div>
+
+      <!-- Vote Footer Status -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex items-center justify-between text-xs font-mono">
+        <span id="voting-status-text">Select a suspect to cast your vote!</span>
+        <button id="btn-skip-vote" onclick="castVote('SKIP')" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-orbitron font-bold transition-all cursor-pointer">
+          SKIP VOTE 🚫
+        </button>
+      </div>
+    </section>
+
+
+    <!-- ================= 7. EJECTION & ALIEN LAST CHANCE SCREEN ================= -->
+    <section id="screen-ejection" class="hidden flex-1 flex flex-col items-center justify-center my-auto max-w-xl mx-auto w-full space-y-4 text-center">
+      
+      <!-- Canvas Ejection Box -->
+      <div class="relative w-full h-56 bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden flex flex-col items-center justify-center p-4 shadow-2xl">
+        <canvas id="eject-canvas" class="absolute inset-0 w-full h-full"></canvas>
+
+        <div id="ejected-avatar-box" class="relative z-10 transform -rotate-45 transition-transform duration-700">
+          <!-- Rendered Avatar -->
+        </div>
+
+        <div class="relative z-10 mt-3 space-y-1">
+          <h2 id="ejection-main-title" class="text-xl font-black font-orbitron text-white">
+            CADET ALEX WAS EJECTED.
+          </h2>
+          <p id="ejection-sub-title" class="text-xs font-bold font-mono text-amongRed">
+            THEY WERE AN ALIEN! 👽
+          </p>
+        </div>
+      </div>
+
+      <!-- Alien Last Chance Guessing Box (Shown if Alien is caught) -->
+      <div id="alien-last-chance-box" class="hidden w-full bg-slate-900 border-2 border-amber-500/80 rounded-2xl p-5 backdrop-blur-xl space-y-3 text-left">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+          <span class="font-orbitron font-bold text-amber-400 text-xs">🛸 ALIEN LAST CHANCE!</span>
+          <span class="text-[10px] font-mono text-slate-400">Guess the Sub-Topic to STEAL victory!</span>
+        </div>
+
+        <p class="text-xs text-slate-300 font-medium">Which was the exact secret Sub-Topic?</p>
+        
+        <div id="alien-guess-options-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- Ghost Broadcast Chat (For ejected aliens/ghosts) -->
+      <div id="ghost-chat-box" class="w-full bg-slate-900/80 border border-slate-800 rounded-xl p-3 space-y-2 text-left">
+        <span class="text-[10px] font-orbitron text-slate-400 uppercase">👻 Ghost Broadcast Chat</span>
+        <div id="ghost-messages-feed" class="h-16 overflow-y-auto text-xs font-mono space-y-1 bg-slate-950 p-2 rounded-lg border border-slate-800 text-slate-300">
+          <p class="text-slate-500 italic">No ghost transmissions yet...</p>
+        </div>
+      </div>
+
+      <button id="btn-proceed-ejection" onclick="finishEjectionPhase()" class="w-full py-3 bg-gradient-to-r from-amongCyan to-blue-600 text-slate-950 font-orbitron font-black text-xs rounded-xl shadow-lg cursor-pointer">
+        CONTINUE GAME ➔
+      </button>
+    </section>
+
+
+    <!-- ================= 8. VICTORY / END GAME SCREENS ================= -->
+    <section id="screen-endgame" class="hidden flex-1 flex flex-col items-center justify-center my-auto max-w-xl mx-auto w-full text-center space-y-4">
+      
+      <div class="relative w-full bg-slate-900 border-2 border-slate-800 rounded-3xl p-6 backdrop-blur-2xl shadow-2xl space-y-4 overflow-hidden">
+        
+        <canvas id="victory-canvas" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
+
+        <div class="relative z-10 space-y-2">
+          <div id="endgame-icon" class="text-5xl animate-bounce">
+            🏆
+          </div>
+
+          <h2 id="endgame-title" class="text-2xl sm:text-3xl font-black font-orbitron text-white">
+            CREWMATES WIN!
+          </h2>
+          <p id="endgame-subtitle" class="text-xs text-slate-300 max-w-md mx-auto">
+            All Aliens were unmasked and ejected from the ship!
+          </p>
+        </div>
+
+        <div id="endgame-roles-summary" class="relative z-10 bg-slate-950 p-3 rounded-xl border border-slate-800 text-left space-y-2 text-xs">
+          <!-- Summary of roles -->
+        </div>
+
+        <button onclick="returnToLobby()" class="relative z-10 w-full py-3.5 bg-gradient-to-r from-amongCyan to-blue-600 text-slate-950 font-orbitron font-black text-xs sm:text-sm rounded-xl shadow-xl cursor-pointer active:scale-95">
+          RETURN TO LOBBY 🚀
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Firebase Config Modal -->
+  <div id="modal-firebase-config" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-4 text-left">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <h3 class="font-orbitron font-bold text-sm text-white">⚙️ NETWORK & FIREBASE SETTINGS</h3>
+        <button onclick="closeConfigModal()" class="text-slate-400 hover:text-white font-bold">✕</button>
+      </div>
+
+      <p class="text-xs text-slate-300 leading-relaxed">
+        This app includes an <strong>automatic Local Sync Engine</strong> so multi-tab testing works out-of-the-box on 1 device. To play across different phones/laptops, paste your Firebase Realtime DB Config below:
+      </p>
+
+      <textarea id="input-firebase-json" rows="5" placeholder='{"apiKey": "...", "databaseURL": "..."}' class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 font-mono text-[11px] text-cyan-300 focus:outline-none focus:border-amongCyan"></textarea>
+
+      <div class="flex gap-2">
+        <button onclick="saveFirebaseConfig()" class="flex-1 py-2.5 bg-amongCyan text-slate-950 font-orbitron font-bold text-xs rounded-xl">SAVE & RECONNECT</button>
+        <button onclick="closeConfigModal()" class="px-4 py-2.5 bg-slate-800 text-slate-300 font-orbitron font-bold text-xs rounded-xl">CANCEL</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ================= JAVASCRIPT & MULTIPLAYER LOGIC ================= -->
+  <script>
+    /* ------------------------------------------------------------------
+       1. GAME CONSTANTS & TOPIC DATABASE
+       ------------------------------------------------------------------ */
+    const AVATAR_COLORS = [
+      { name: 'Red', hex: '#ff2a4b' },
+      { name: 'Cyan', hex: '#06b6d4' },
+      { name: 'Green', hex: '#22c55e' },
+      { name: 'Yellow', hex: '#eab308' },
+      { name: 'Purple', hex: '#a855f7' },
+      { name: 'Orange', hex: '#f97316' },
+      { name: 'Pink', hex: '#ec4899' },
+      { name: 'Blue', hex: '#2563eb' }
+    ];
+
+    const AVATAR_HATS = [
+      { id: 'none', label: '🚫 None' },
+      { id: 'crown', label: '👑 Crown' },
+      { id: 'goggles', label: '🥽 Visor' },
+      { id: 'pirate', label: '🏴‍☠️ Pirate' },
+      { id: 'beanie', label: '🧢 Cap' },
+      { id: 'detective', label: '🕵️ Fedora' },
+      { id: 'tophat', label: '🎩 Top Hat' }
+    ];
+
+    const TOPICS_DATABASE = [
+      {
+        category: "ENVIRONMENT",
+        general: "ENVIRONMENT & CLIMATE",
+        sub: "Plastic Waste in Oceans",
+        distractors: ["Solar Energy Transition", "Deforestation in Amazon", "Urban Air Pollution"]
+      },
+      {
+        category: "ECONOMY",
+        general: "GLOBAL ECONOMY",
+        sub: "Inflation & Interest Rates",
+        distractors: ["Cryptocurrency Regulations", "Real Estate Housing Bubble", "Unemployment & Jobs"]
+      },
+      {
+        category: "TECH",
+        general: "TECHNOLOGY & AI",
+        sub: "Artificial Intelligence in Healthcare",
+        distractors: ["Autonomous Electric Vehicles", "Quantum Computing Breakthroughs", "Social Media Privacy"]
+      },
+      {
+        category: "EDUCATION",
+        general: "EDUCATION & CAREERS",
+        sub: "Remote Online Learning Effectiveness",
+        distractors: ["Standardized Testing Debates", "University Tuition Costs", "STEM Education Focus"]
+      }
+    ];
+
+    /* ------------------------------------------------------------------
+       2. LOCAL APP & NETWORK STATE
+       ------------------------------------------------------------------ */
+    let localPlayer = {
+      id: 'p_' + Math.random().toString(36).substring(2, 9),
+      name: 'Cadet',
+      color: '#ff2a4b',
+      hat: 'crown',
+      isHost: false,
+      sentence: '',
+      hasSubmitted: false,
+      votedFor: null,
+      isEjected: false
+    };
+
+    let roomState = {
+      code: null,
+      status: 'home', // home, lobby, role_reveal, writing, reading, voting, ejection, alien_last_chance, crew_win, alien_win
+      settings: {
+        alienCount: 1,
+        category: 'RANDOM'
+      },
+      currentTopic: null,
+      players: {},
+      ejectedPlayerId: null,
+      ghostMessages: []
+    };
+
+    let localSyncChannel = null;
+    let firebaseDb = null;
+    let firebaseRoomRef = null;
+
+
+    /* ------------------------------------------------------------------
+       3. AUDIO SYNTHESIZER (WEB AUDIO API)
+       ------------------------------------------------------------------ */
+    let audioCtx = null;
+    let isMuted = true;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function toggleAudio() {
+      initAudio();
+      isMuted = !isMuted;
+      document.getElementById('audio-label').innerText = isMuted ? 'MUSIC: OFF' : 'MUSIC: ON';
+      playSFX('click');
+    }
+
+    function playSFX(type) {
+      if (isMuted || !audioCtx) return;
+      initAudio();
+
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      if (type === 'click') {
+        osc.frequency.setValueAtTime(400, now);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+        osc.start(now); osc.stop(now + 0.05);
+      } else if (type === 'alarm') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(500, now);
+        osc.frequency.linearRampToValueAtTime(900, now + 0.2);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.start(now); osc.stop(now + 0.25);
+      } else if (type === 'victory') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.1);
+        osc.frequency.setValueAtTime(783.99, now + 0.2);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+        osc.start(now); osc.stop(now + 0.4);
+      }
+    }
+
+
+    /* ------------------------------------------------------------------
+       4. AVATAR SVG GENERATOR
+       ------------------------------------------------------------------ */
+    function renderAvatarSVG(colorHex, hatId = 'none', sizeClass = "w-16 h-16") {
+      let hatSvg = '';
+      if (hatId === 'crown') {
+        hatSvg = `<path d="M 32,22 L 40,32 L 50,18 L 60,32 L 68,22 L 65,36 L 35,36 Z" fill="#eab308" stroke="#0f172a" stroke-width="2"/>`;
+      } else if (hatId === 'goggles') {
+        hatSvg = `<rect x="36" y="28" width="28" height="8" rx="3" fill="#06b6d4" stroke="#0f172a" stroke-width="2"/>`;
+      } else if (hatId === 'pirate') {
+        hatSvg = `<path d="M 30,30 Q 50,10 70,30 L 65,34 L 35,34 Z" fill="#1e293b" stroke="#0f172a" stroke-width="2"/>`;
+      } else if (hatId === 'beanie') {
+        hatSvg = `<path d="M 35,32 Q 50,16 65,32 Z" fill="#a855f7" stroke="#0f172a" stroke-width="2"/>`;
+      } else if (hatId === 'detective') {
+        hatSvg = `<ellipse cx="50" cy="30" rx="20" ry="4" fill="#78350f"/><path d="M 36,30 L 40,18 L 60,18 L 64,30 Z" fill="#78350f"/>`;
+      } else if (hatId === 'tophat') {
+        hatSvg = `<ellipse cx="50" cy="32" rx="18" ry="4" fill="#0f172a"/><rect x="38" y="16" width="24" height="16" fill="#0f172a"/>`;
+      }
+
+      return `
+        <svg class="${sizeClass} drop-shadow-md inline-block" viewBox="0 0 100 100">
+          <rect x="18" y="38" width="18" height="42" rx="8" fill="${colorHex}" stroke="#0f172a" stroke-width="4"/>
+          <path d="M 35,25 C 35,12 65,12 65,25 L 65,75 C 65,85 58,88 52,88 L 52,78 L 48,78 L 48,88 C 42,88 35,85 35,75 Z" fill="${colorHex}" stroke="#0f172a" stroke-width="4"/>
+          <ellipse cx="60" cy="35" rx="16" ry="10" fill="#06b6d4" stroke="#0f172a" stroke-width="3"/>
+          <ellipse cx="58" cy="33" rx="10" ry="5" fill="#a5f3fc" opacity="0.8"/>
+          ${hatSvg}
+        </svg>
+      `;
+    }
+
+
+    /* ------------------------------------------------------------------
+       5. KAHOOT LOBBY & CUSTOMIZER UI LOGIC
+       ------------------------------------------------------------------ */
+    function initCustomizer() {
+      // Build color grid
+      const colorGrid = document.getElementById('color-picker-grid');
+      colorGrid.innerHTML = '';
+      AVATAR_COLORS.forEach(c => {
+        const btn = document.createElement('button');
+        btn.className = `w-6 h-6 rounded-full border-2 transition-transform cursor-pointer ${localPlayer.color === c.hex ? 'border-white scale-110' : 'border-transparent'}`;
+        btn.style.backgroundColor = c.hex;
+        btn.onclick = () => {
+          localPlayer.color = c.hex;
+          initCustomizer();
+          updateAvatarPreview();
+        };
+        colorGrid.appendChild(btn);
+      });
+
+      // Build hat grid
+      const hatGrid = document.getElementById('hat-picker-grid');
+      hatGrid.innerHTML = '';
+      AVATAR_HATS.forEach(h => {
+        const btn = document.createElement('button');
+        btn.className = `px-2 py-1 text-[11px] font-orbitron font-bold rounded-lg border transition-all cursor-pointer ${localPlayer.hat === h.id ? 'bg-amongCyan text-slate-950 border-white' : 'bg-slate-950 text-slate-300 border-slate-800'}`;
+        btn.innerText = h.label;
+        btn.onclick = () => {
+          localPlayer.hat = h.id;
+          initCustomizer();
+          updateAvatarPreview();
+        };
+        hatGrid.appendChild(btn);
+      });
+    }
+
+    function updateAvatarPreview() {
+      const nicknameInput = document.getElementById('input-nickname');
+      localPlayer.name = nicknameInput.value.trim() || 'Cadet';
+      document.getElementById('preview-nickname').innerText = localPlayer.name;
+
+      const previewContainer = document.getElementById('avatar-preview-container');
+      previewContainer.innerHTML = renderAvatarSVG(localPlayer.color, localPlayer.hat, "w-24 h-24");
+    }
+
+
+    /* ------------------------------------------------------------------
+       6. MULTIPLAYER NETWORK & REALTIME ENGINE
+       ------------------------------------------------------------------ */
+    function initNetworkEngine() {
+      // Local BroadcastChannel fallback for multi-tab testing without Firebase setup
+      if ('BroadcastChannel' in window) {
+        localSyncChannel = new BroadcastChannel('who_is_an_alien_sync');
+        localSyncChannel.onmessage = (event) => {
+          if (event.data && event.data.code === roomState.code) {
+            applyRemoteState(event.data.state);
+          }
+        };
+      }
+
+      // Check URL query param for room code
+      const urlParams = new URLSearchParams(window.location.search);
+      const codeParam = urlParams.get('room');
+      if (codeParam) {
+        document.getElementById('input-room-code').value = codeParam.toUpperCase();
+      }
+    }
+
+    function syncStateToNetwork() {
+      if (!roomState.code) return;
+
+      // Broadcast to local tabs
+      if (localSyncChannel) {
+        localSyncChannel.postMessage({ code: roomState.code, state: roomState });
+      }
+
+      // Sync to Firebase if configured
+      if (firebaseRoomRef) {
+        window.FirebaseLib.set(firebaseRoomRef, roomState);
+      }
+    }
+
+    function applyRemoteState(newState) {
+      if (!newState) return;
+      roomState = newState;
+      renderCurrentScreen();
+    }
+
+
+    /* ------------------------------------------------------------------
+       7. ROOM CREATION & JOINING
+       ------------------------------------------------------------------ */
+    function createRoom() {
+      playSFX('click');
+      const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+      localPlayer.isHost = true;
+
+      roomState = {
+        code: code,
+        status: 'lobby',
+        settings: { alienCount: 1, category: 'RANDOM' },
+        currentTopic: null,
+        players: { [localPlayer.id]: { ...localPlayer } },
+        ejectedPlayerId: null,
+        ghostMessages: []
+      };
+
+      connectRoomRealtime(code);
+      syncStateToNetwork();
+    }
+
+    function joinRoom() {
+      playSFX('click');
+      const codeInput = document.getElementById('input-room-code').value.trim().toUpperCase();
+      if (!codeInput || codeInput.length < 4) {
+        showToast('Please enter a valid 4-character Room Code!');
+        return;
+      }
+
+      localPlayer.isHost = false;
+      connectRoomRealtime(codeInput);
+    }
+
+    function connectRoomRealtime(code) {
+      roomState.code = code;
+      document.getElementById('lobby-room-code').innerText = code;
+
+      // Add local player to players list
+      if (!roomState.players) roomState.players = {};
+      roomState.players[localPlayer.id] = { ...localPlayer };
+
+      syncStateToNetwork();
+      showScreen('screen-lobby');
+      showToast(`Connected to Room ${code}!`);
+    }
+
+    function addBotPlayer() {
+      playSFX('click');
+      const botId = 'bot_' + Math.random().toString(36).substring(2, 7);
+      const botColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)].hex;
+      const botHat = AVATAR_HATS[Math.floor(Math.random() * AVATAR_HATS.length)].id;
+      const botNames = ['Bot-Zeus', 'Bot-Nova', 'Bot-Astra', 'Bot-Orion', 'Bot-Titan'];
+      const name = botNames[Object.keys(roomState.players).length % botNames.length];
+
+      roomState.players[botId] = {
+        id: botId,
+        name: name,
+        color: botColor,
+        hat: botHat,
+        isHost: false,
+        sentence: '',
+        hasSubmitted: false,
+        votedFor: null,
+        isEjected: false
+      };
+
+      syncStateToNetwork();
+    }
+
+    function updateHostSettings() {
+      if (!localPlayer.isHost) return;
+      roomState.settings.alienCount = parseInt(document.getElementById('select-alien-count').value);
+      roomState.settings.category = document.getElementById('select-topic-cat').value;
+      syncStateToNetwork();
+    }
+
+
+    /* ------------------------------------------------------------------
+       8. GAME LAUNCH & ROLE ASSIGNMENT
+       ------------------------------------------------------------------ */
+    function launchGame() {
+      playSFX('click');
+      const playerIds = Object.keys(roomState.players);
+
+      if (playerIds.length < 3) {
+        showToast('Minimum 3 players needed to launch! Click "ADD BOT" for testing.');
+        return;
+      }
+
+      // Pick Topic
+      let topicList = TOPICS_DATABASE;
+      if (roomState.settings.category !== 'RANDOM') {
+        topicList = TOPICS_DATABASE.filter(t => t.category === roomState.settings.category);
+      }
+      const selectedTopic = topicList[Math.floor(Math.random() * topicList.length)];
+      roomState.currentTopic = selectedTopic;
+
+      // Assign Alien Roles
+      const shuffled = [...playerIds].sort(() => 0.5 - Math.random());
+      const alienCount = Math.min(roomState.settings.alienCount, playerIds.length - 1);
+      const alienIds = shuffled.slice(0, alienCount);
+
+      playerIds.forEach(id => {
+        roomState.players[id].isAlien = alienIds.includes(id);
+        roomState.players[id].sentence = '';
+        roomState.players[id].hasSubmitted = false;
+        roomState.players[id].votedFor = null;
+        roomState.players[id].isEjected = false;
+      });
+
+      roomState.status = 'role_reveal';
+      syncStateToNetwork();
+
+      // Auto countdown to writing phase
+      setTimeout(() => {
+        if (localPlayer.isHost) {
+          roomState.status = 'writing';
+          syncStateToNetwork();
+        }
+      }, 5000);
+    }
+
+
+    /* ------------------------------------------------------------------
+       9. SENTENCE WRITING & REVEAL LOGIC
+       ------------------------------------------------------------------ */
+    function submitSentence() {
+      playSFX('click');
+      const input = document.getElementById('input-player-sentence');
+      const sentence = input.value.trim();
+
+      if (!sentence) {
+        showToast('Please type a sentence before submitting!');
+        return;
+      }
+
+      roomState.players[localPlayer.id].sentence = sentence;
+      roomState.players[localPlayer.id].hasSubmitted = true;
+
+      // Auto fill bot sentences if host
+      if (localPlayer.isHost) {
+        Object.keys(roomState.players).forEach(id => {
+          if (id.startsWith('bot_') && !roomState.players[id].hasSubmitted) {
+            const isAlien = roomState.players[id].isAlien;
+            if (isAlien) {
+              roomState.players[id].sentence = "Global economic trends are fluctuating significantly across various markets worldwide.";
+            } else {
+              roomState.players[id].sentence = `The central bank raised interest rates to combat rising consumer price inflation this quarter.`;
+            }
+            roomState.players[id].hasSubmitted = true;
+          }
+        });
+      }
+
+      // Check if all submitted
+      const allSubmitted = Object.values(roomState.players).every(p => p.hasSubmitted);
+      if (allSubmitted && localPlayer.isHost) {
+        roomState.status = 'reading';
+      }
+
+      syncStateToNetwork();
+      showToast('Sentence submitted!');
+    }
+
+    function forceReveal() {
+      if (!localPlayer.isHost) return;
+      playSFX('click');
+      roomState.status = 'reading';
+      syncStateToNetwork();
+    }
+
+    function proceedToVoting() {
+      if (!localPlayer.isHost) return;
+      playSFX('alarm');
+      roomState.status = 'voting';
+      syncStateToNetwork();
+    }
+
+
+    /* ------------------------------------------------------------------
+       10. VOTING & EJECTION SYSTEM
+       ------------------------------------------------------------------ */
+    function castVote(targetId) {
+      playSFX('click');
+      roomState.players[localPlayer.id].votedFor = targetId;
+
+      // Auto bot votes
+      if (localPlayer.isHost) {
+        Object.keys(roomState.players).forEach(id => {
+          if (id.startsWith('bot_') && !roomState.players[id].votedFor) {
+            const possible = Object.keys(roomState.players).filter(p => p !== id);
+            roomState.players[id].votedFor = possible[Math.floor(Math.random() * possible.length)];
+          }
+        });
+      }
+
+      // Check if all voted
+      const allVoted = Object.values(roomState.players).every(p => p.votedFor !== null);
+      if (allVoted && localPlayer.isHost) {
+        tallyVotesAndEject();
+      }
+
+      syncStateToNetwork();
+    }
+
+    function tallyVotesAndEject() {
+      const voteCounts = {};
+      Object.values(roomState.players).forEach(p => {
+        if (p.votedFor && p.votedFor !== 'SKIP') {
+          voteCounts[p.votedFor] = (voteCounts[p.votedFor] || 0) + 1;
+        }
+      });
+
+      let highestVotes = 0;
+      let ejectedId = null;
+
+      Object.entries(voteCounts).forEach(([id, count]) => {
+        if (count > highestVotes) {
+          highestVotes = count;
+          ejectedId = id;
+        }
+      });
+
+      roomState.ejectedPlayerId = ejectedId;
+
+      if (ejectedId && roomState.players[ejectedId]) {
+        roomState.players[ejectedId].isEjected = true;
+        const isAlien = roomState.players[ejectedId].isAlien;
+
+        if (isAlien) {
+          roomState.status = 'alien_last_chance';
+        } else {
+          // Check win conditions
+          checkWinConditions();
+        }
+      } else {
+        // Tie or skipped -> check win conditions
+        checkWinConditions();
+      }
+
+      syncStateToNetwork();
+    }
+
+    function submitAlienLastGuess(guessedSubTopic) {
+      playSFX('click');
+      const correctSub = roomState.currentTopic.sub;
+
+      if (guessedSubTopic === correctSub) {
+        // Alien guessed correctly! Alien Wins!
+        roomState.status = 'alien_win';
+        showToast('🛸 ALIEN GUESSED CORRECTLY! ALIEN WINS!');
+      } else {
+        // Alien failed guess -> Check if any aliens remaining
+        showToast('❌ INCORRECT GUESS! Crewmates survive!');
+        checkWinConditions();
+      }
+
+      syncStateToNetwork();
+    }
+
+    function checkWinConditions() {
+      const activePlayers = Object.values(roomState.players).filter(p => !p.isEjected);
+      const activeAliens = activePlayers.filter(p => p.isAlien);
+
+      if (activeAliens.length === 0) {
+        roomState.status = 'crew_win';
+      } else if (activeAliens.length >= activePlayers.length - activeAliens.length) {
+        roomState.status = 'alien_win';
+      } else {
+        roomState.status = 'writing'; // Next round
+      }
+    }
+
+    function finishEjectionPhase() {
+      if (!localPlayer.isHost) return;
+      checkWinConditions();
+      syncStateToNetwork();
+    }
+
+
+    /* ------------------------------------------------------------------
+       11. SCREEN RENDERER (RESPONSIVE VIEW SWITCHER)
+       ------------------------------------------------------------------ */
+    function renderCurrentScreen() {
+      const screens = ['screen-home', 'screen-lobby', 'screen-role-reveal', 'screen-writing', 'screen-reading', 'screen-voting', 'screen-ejection', 'screen-endgame'];
+      screens.forEach(s => document.getElementById(s).classList.add('hidden'));
+
+      // Render based on roomState.status
+      if (roomState.status === 'home') {
+        document.getElementById('screen-home').classList.remove('hidden');
+      } else if (roomState.status === 'lobby') {
+        document.getElementById('screen-lobby').classList.remove('hidden');
+        renderLobbyScreen();
+      } else if (roomState.status === 'role_reveal') {
+        document.getElementById('screen-role-reveal').classList.remove('hidden');
+        renderRoleRevealScreen();
+      } else if (roomState.status === 'writing') {
+        document.getElementById('screen-writing').classList.remove('hidden');
+        renderWritingScreen();
+      } else if (roomState.status === 'reading') {
+        document.getElementById('screen-reading').classList.remove('hidden');
+        renderReadingScreen();
+      } else if (roomState.status === 'voting') {
+        document.getElementById('screen-voting').classList.remove('hidden');
+        renderVotingScreen();
+      } else if (roomState.status === 'ejection' || roomState.status === 'alien_last_chance') {
+        document.getElementById('screen-ejection').classList.remove('hidden');
+        renderEjectionScreen();
+      } else if (roomState.status === 'crew_win' || roomState.status === 'alien_win') {
+        document.getElementById('screen-endgame').classList.remove('hidden');
+        renderEndgameScreen();
+      }
+    }
+
+    function renderLobbyScreen() {
+      const grid = document.getElementById('lobby-players-grid');
+      grid.innerHTML = '';
+
+      const players = Object.values(roomState.players || {});
+      document.getElementById('lobby-player-count').innerText = `Waiting for crewmates... (${players.length}/8)`;
+
+      players.forEach(p => {
+        const card = document.createElement('div');
+        card.className = "bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center space-y-2 backdrop-blur-md shadow-lg";
+        card.innerHTML = `
+          <div class="relative">
+            ${renderAvatarSVG(p.color, p.hat, "w-16 h-16")}
+            ${p.isHost ? '<span class="absolute -top-2 -right-2 text-base">👑</span>' : ''}
+          </div>
+          <span class="font-orbitron font-bold text-xs text-white truncate max-w-[100px]">${p.name}</span>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">READY</span>
+        `;
+        grid.appendChild(card);
+      });
+
+      // Host controls visibility
+      const hostPanel = document.getElementById('host-controls-panel');
+      if (localPlayer.isHost) {
+        hostPanel.classList.remove('hidden');
+      } else {
+        hostPanel.classList.add('hidden');
+      }
+    }
+
+    function renderRoleRevealScreen() {
+      const p = roomState.players[localPlayer.id] || localPlayer;
+      const isAlien = p.isAlien;
+
+      const title = document.getElementById('role-title');
+      const badge = document.getElementById('role-badge');
+      const icon = document.getElementById('role-icon');
+      const subtopicBox = document.getElementById('role-subtopic-box');
+      const warning = document.getElementById('role-alien-warning');
+
+      document.getElementById('role-general-topic').innerText = roomState.currentTopic.general;
+      document.getElementById('role-subtopic').innerText = roomState.currentTopic.sub;
+
+      if (isAlien) {
+        icon.innerText = "👽";
+        title.innerText = "YOU ARE THE ALIEN";
+        title.className = "text-2xl sm:text-3xl font-black font-orbitron text-amongRed mt-2";
+        badge.innerText = "IMPOSTER ROLE";
+        badge.className = "px-3 py-1 rounded-full text-[10px] font-orbitron font-bold bg-amongRed/20 text-amongRed border border-amongRed/40 uppercase tracking-widest";
+        subtopicBox.classList.add('hidden');
+        warning.classList.remove('hidden');
+      } else {
+        icon.innerText = "🧑‍🚀";
+        title.innerText = "YOU ARE A CREWMATE";
+        title.className = "text-2xl sm:text-3xl font-black font-orbitron text-white mt-2";
+        badge.innerText = "CREWMATE ROLE";
+        badge.className = "px-3 py-1 rounded-full text-[10px] font-orbitron font-bold bg-amongCyan/20 text-amongCyan border border-amongCyan/40 uppercase tracking-widest";
+        subtopicBox.classList.remove('hidden');
+        warning.classList.add('hidden');
+      }
+    }
+
+    function renderWritingScreen() {
+      const p = roomState.players[localPlayer.id] || localPlayer;
+      const promptText = document.getElementById('writing-prompt-text');
+
+      if (p.isAlien) {
+        promptText.innerHTML = `General Topic: <span class="text-amongRed font-bold">${roomState.currentTopic.general}</span>. You don't know the exact sub-topic! Write a general sentence to blend in!`;
+      } else {
+        promptText.innerHTML = `Write 1 sentence related to <span class="text-amongCyan font-bold">${roomState.currentTopic.sub}</span>.`;
+      }
+
+      const feed = document.getElementById('writing-submission-feed');
+      feed.innerHTML = '';
+
+      Object.values(roomState.players).forEach(player => {
+        const badge = document.createElement('div');
+        badge.className = `p-2 rounded-xl border flex items-center gap-2 text-xs font-mono ${player.hasSubmitted ? 'bg-emerald-950/60 border-emerald-800 text-emerald-300' : 'bg-slate-950 border-slate-800 text-slate-400'}`;
+        badge.innerHTML = `
+          ${renderAvatarSVG(player.color, player.hat, "w-6 h-6")}
+          <span class="truncate max-w-[80px]">${player.name}</span>
+          <span class="ml-auto font-bold">${player.hasSubmitted ? '✅' : '✍️'}</span>
+        `;
+        feed.appendChild(badge);
+      });
+
+      if (localPlayer.isHost) {
+        document.getElementById('btn-force-reveal').classList.remove('hidden');
+      }
+    }
+
+    function renderReadingScreen() {
+      const grid = document.getElementById('reading-sentences-grid');
+      grid.innerHTML = '';
+
+      Object.values(roomState.players).forEach(p => {
+        if (!p.sentence) return;
+        const card = document.createElement('div');
+        card.className = "bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between space-y-3 backdrop-blur-md shadow-lg";
+        card.innerHTML = `
+          <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
+            ${renderAvatarSVG(p.color, p.hat, "w-8 h-8")}
+            <span class="font-orbitron font-bold text-xs text-slate-200">${p.name}</span>
+          </div>
+          <p class="text-xs sm:text-sm font-medium text-slate-100 leading-relaxed italic">
+            "${p.sentence}"
+          </p>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function renderVotingScreen() {
+      const grid = document.getElementById('voting-players-grid');
+      grid.innerHTML = '';
+
+      Object.values(roomState.players).forEach(p => {
+        if (p.isEjected) return;
+        const isSelf = p.id === localPlayer.id;
+        const hasVotedThis = roomState.players[localPlayer.id]?.votedFor === p.id;
+
+        const card = document.createElement('div');
+        card.className = `bg-slate-900/90 border-2 rounded-2xl p-3.5 flex items-center justify-between backdrop-blur-md shadow-lg transition-all ${hasVotedThis ? 'border-amongRed shadow-amongRed/30' : 'border-slate-800'}`;
+        
+        card.innerHTML = `
+          <div class="flex items-center gap-3">
+            ${renderAvatarSVG(p.color, p.hat, "w-10 h-10")}
+            <div>
+              <span class="font-orbitron font-bold text-xs text-white block">${p.name}</span>
+              <span class="text-[10px] font-mono text-slate-400">${p.hasSubmitted ? 'Submitted sentence' : 'No sentence'}</span>
+            </div>
+          </div>
+
+          <button onclick="castVote('${p.id}')" ${isSelf ? 'disabled' : ''} class="px-4 py-2 ${isSelf ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-amongRed to-rose-600 text-white hover:scale-105 cursor-pointer'} font-orbitron font-bold text-xs rounded-xl transition-all shadow-md">
+            VOTE 🗳️
+          </button>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function renderEjectionScreen() {
+      const ejectedPlayer = roomState.players[roomState.ejectedPlayerId];
+      const title = document.getElementById('ejection-main-title');
+      const sub = document.getElementById('ejection-sub-title');
+      const avatarBox = document.getElementById('ejected-avatar-box');
+
+      if (ejectedPlayer) {
+        avatarBox.innerHTML = renderAvatarSVG(ejectedPlayer.color, ejectedPlayer.hat, "w-20 h-20");
+        title.innerText = `${ejectedPlayer.name.toUpperCase()} WAS EJECTED.`;
+        if (ejectedPlayer.isAlien) {
+          sub.innerText = "THEY WERE AN ALIEN! 👽";
+          sub.className = "text-xs font-bold font-mono text-amongRed";
+        } else {
+          sub.innerText = "THEY WERE INNOCENT! 🧑‍🚀";
+          sub.className = "text-xs font-bold font-mono text-amongCyan";
+        }
+      } else {
+        title.innerText = "NO ONE WAS EJECTED.";
+        sub.innerText = "(Tie vote or skipped)";
+      }
+
+      // Alien last chance guess box
+      const lastChanceBox = document.getElementById('alien-last-chance-box');
+      if (roomState.status === 'alien_last_chance' && localPlayer.id === roomState.ejectedPlayerId) {
+        lastChanceBox.classList.remove('hidden');
+        renderAlienGuessOptions();
+      } else {
+        lastChanceBox.classList.add('hidden');
+      }
+
+      initEjectCanvas();
+    }
+
+    function renderAlienGuessOptions() {
+      const grid = document.getElementById('alien-guess-options-grid');
+      grid.innerHTML = '';
+
+      const topic = roomState.currentTopic;
+      const allChoices = [topic.sub, ...topic.distractors].sort(() => 0.5 - Math.random());
+
+      allChoices.forEach(choice => {
+        const btn = document.createElement('button');
+        btn.className = "p-2.5 bg-slate-950 hover:bg-amber-950/60 border border-slate-700 hover:border-amber-500 text-slate-200 font-semibold text-xs rounded-xl transition-all text-left cursor-pointer";
+        btn.innerText = choice;
+        btn.onclick = () => submitAlienLastGuess(choice);
+        grid.appendChild(btn);
+      });
+    }
+
+    function renderEndgameScreen() {
+      const isCrewWin = roomState.status === 'crew_win';
+      const title = document.getElementById('endgame-title');
+      const sub = document.getElementById('endgame-subtitle');
+      const icon = document.getElementById('endgame-icon');
+
+      if (isCrewWin) {
+        icon.innerText = "🏆";
+        title.innerText = "CREWMATES WIN!";
+        sub.innerText = "All Aliens were unmasked and ejected from the ship!";
+        playSFX('victory');
+      } else {
+        icon.innerText = "🛸";
+        title.innerText = "ALIENS WIN!";
+        sub.innerText = "The Aliens successfully blended in and devoured the crew!";
+        playSFX('alarm');
+      }
+
+      const summary = document.getElementById('endgame-roles-summary');
+      summary.innerHTML = '<span class="font-orbitron font-bold text-slate-400 block mb-1">PLAYER ROLES SUMMARY:</span>';
+
+      Object.values(roomState.players).forEach(p => {
+        const line = document.createElement('div');
+        line.className = "flex items-center justify-between text-xs py-1 border-b border-slate-800/60";
+        line.innerHTML = `
+          <span class="font-bold text-white">${p.name}</span>
+          <span class="${p.isAlien ? 'text-amongRed' : 'text-amongCyan'} font-mono font-bold">${p.isAlien ? '👽 ALIEN' : '🧑‍🚀 CREWMATE'}</span>
+        `;
+        summary.appendChild(line);
+      });
+
+      initVictoryCanvas(isCrewWin);
+    }
+
+
+    /* ------------------------------------------------------------------
+       12. CANVAS ANIMATIONS (EJECTION & VICTORY)
+       ------------------------------------------------------------------ */
+    let canvasAnimId = null;
+
+    function initEjectCanvas() {
+      const canvas = document.getElementById('eject-canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+
+      const stars = Array.from({ length: 50 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        speed: 2 + Math.random() * 4,
+        size: Math.random() * 2
+      }));
+
+      function render() {
+        ctx.fillStyle = '#05070f';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = '#ffffff';
+        stars.forEach(s => {
+          s.x -= s.speed;
+          if (s.x < 0) s.x = canvas.width;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        canvasAnimId = requestAnimationFrame(render);
+      }
+
+      if (canvasAnimId) cancelAnimationFrame(canvasAnimId);
+      render();
+    }
+
+    function initVictoryCanvas(isCrewWin) {
+      const canvas = document.getElementById('victory-canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+
+      const particles = Array.from({ length: 60 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vy: isCrewWin ? -Math.random() * 3 - 1 : Math.random() * 3 + 1,
+        color: isCrewWin ? ['#06b6d4', '#eab308', '#22c55e'][Math.floor(Math.random() * 3)] : '#ff2a4b',
+        size: Math.random() * 4 + 2
+      }));
+
+      function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        particles.forEach(p => {
+          p.y += p.vy;
+          if (p.y < 0) p.y = canvas.height;
+          if (p.y > canvas.height) p.y = 0;
+
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        canvasAnimId = requestAnimationFrame(render);
+      }
+
+      if (canvasAnimId) cancelAnimationFrame(canvasAnimId);
+      render();
+    }
+
+
+    /* ------------------------------------------------------------------
+       13. HELPER UTILITIES
+       ------------------------------------------------------------------ */
+    function showToast(msg) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = "bg-slate-900 border border-amongCyan/60 text-slate-100 font-medium text-xs px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-md animate-bounce";
+      toast.innerText = msg;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    function copyRoomLink() {
+      const link = `${window.location.origin}${window.location.pathname}?room=${roomState.code}`;
+      navigator.clipboard.writeText(link);
+      showToast('Room Link copied to clipboard!');
+    }
+
+    function goHome() {
+      roomState.status = 'home';
+      renderCurrentScreen();
+    }
+
+    function leaveRoom() {
+      roomState.status = 'home';
+      roomState.code = null;
+      renderCurrentScreen();
+    }
+
+    function returnToLobby() {
+      roomState.status = 'lobby';
+      syncStateToNetwork();
+    }
+
+    function openConfigModal() {
+      document.getElementById('modal-firebase-config').classList.remove('hidden');
+    }
+
+    function closeConfigModal() {
+      document.getElementById('modal-firebase-config').classList.add('hidden');
+    }
+
+    function saveFirebaseConfig() {
+      const val = document.getElementById('input-firebase-json').value.trim();
+      if (val) {
+        try {
+          const cfg = JSON.parse(val);
+          const app = window.FirebaseLib.initializeApp(cfg);
+          firebaseDb = window.FirebaseLib.getDatabase(app);
+          showToast('Firebase Realtime DB connected!');
+          closeConfigModal();
+        } catch(e) {
+          showToast('Invalid Firebase JSON format!');
+        }
+      }
+    }
+
+
+    /* ------------------------------------------------------------------
+       14. MAIN BACKGROUND CANVAS & INITIALIZATION
+       ------------------------------------------------------------------ */
+    const bgCanvas = document.getElementById('bg-star-canvas');
+    const bgCtx = bgCanvas.getContext('2d');
+    let stars = [];
+
+    function resizeBgCanvas() {
+      bgCanvas.width = window.innerWidth;
+      bgCanvas.height = window.innerHeight;
+      stars = Array.from({ length: 80 }, () => ({
+        x: Math.random() * bgCanvas.width,
+        y: Math.random() * bgCanvas.height,
+        r: Math.random() * 1.5,
+        a: Math.random()
+      }));
+    }
+
+    function drawBgCanvas() {
+      bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+      stars.forEach(s => {
+        s.a += 0.005;
+        bgCtx.fillStyle = `rgba(255, 255, 255, ${Math.abs(Math.sin(s.a))})`;
+        bgCtx.beginPath();
+        bgCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        bgCtx.fill();
+      });
+      requestAnimationFrame(drawBgCanvas);
+    }
+
+    window.addEventListener('resize', resizeBgCanvas);
+
+    window.onload = function() {
+      resizeBgCanvas();
+      drawBgCanvas();
+      initCustomizer();
+      updateAvatarPreview();
+      initNetworkEngine();
+      renderCurrentScreen();
+    };
+  </script>
+</body>
+</html>
